@@ -12,6 +12,10 @@
 (define-constant err-milestone-already-approved (err u110))
 (define-constant err-milestone-not-approved (err u111))
 (define-constant err-insufficient-votes (err u112))
+(define-constant err-extension-already-requested (err u113))
+(define-constant err-extension-limit-reached (err u114))
+(define-constant err-insufficient-momentum (err u115))
+(define-constant err-extension-not-found (err u116))
 
 (define-data-var campaign-active bool false)
 (define-data-var campaign-deadline uint u0)
@@ -20,6 +24,10 @@
 (define-data-var beneficiary principal contract-owner)
 (define-data-var milestone-count uint u0)
 (define-data-var required-approval-percentage uint u60)
+(define-data-var extension-count uint u0)
+(define-data-var max-extensions uint u3)
+(define-data-var extension-duration uint u144)
+(define-data-var minimum-momentum-threshold uint u25)
 
 (define-map milestones
     uint
@@ -53,6 +61,25 @@
     bool
 )
 
+(define-map extension-requests
+    uint
+    {
+        requested-at: uint,
+        new-deadline: uint,
+        vote-count: uint,
+        approved: bool,
+        momentum-score: uint,
+    }
+)
+
+(define-map extension-votes
+    {
+        extension-id: uint,
+        voter: principal,
+    }
+    bool
+)
+
 (define-read-only (get-campaign-status)
     (ok {
         active: (var-get campaign-active),
@@ -60,6 +87,8 @@
         target: (var-get campaign-target),
         raised: (var-get total-raised),
         beneficiary: (var-get beneficiary),
+        extensions-used: (var-get extension-count),
+        max-extensions: (var-get max-extensions),
     })
 )
 
@@ -195,6 +224,44 @@
     )
 )
 
+(define-read-only (calculate-campaign-momentum)
+    (let (
+            (current-raised (var-get total-raised))
+            (target (var-get campaign-target))
+            (time-left (time-remaining))
+        )
+        (if (and (> current-raised u0) (> time-left u0))
+            (/ (* current-raised u100) target)
+            u0
+        )
+    )
+)
+
+(define-read-only (get-extension-request (extension-id uint))
+    (map-get? extension-requests extension-id)
+)
+
+(define-read-only (has-voted-for-extension
+        (extension-id uint)
+        (voter principal)
+    )
+    (default-to false
+        (map-get? extension-votes {
+            extension-id: extension-id,
+            voter: voter,
+        })
+    )
+)
+
+(define-read-only (can-request-extension)
+    (and
+        (var-get campaign-active)
+        (< (time-remaining) u72)
+        (< (var-get extension-count) (var-get max-extensions))
+        (>= (calculate-campaign-momentum) (var-get minimum-momentum-threshold))
+    )
+)
+
 (define-public (create-milestone
         (description (string-ascii 256))
         (amount uint)
@@ -265,6 +332,89 @@
                         (ok {
                             approved: false,
                             vote-count: new-vote-count,
+                        })
+                    )
+                )
+            )
+        )
+    )
+)
+
+(define-public (request-campaign-extension)
+    (let (
+            (extension-id (+ (var-get extension-count) u1))
+            (momentum (calculate-campaign-momentum))
+            (new-deadline (+ (var-get campaign-deadline) (var-get extension-duration)))
+        )
+        (asserts! (can-request-extension) err-extension-limit-reached)
+        (asserts! (>= momentum (var-get minimum-momentum-threshold))
+            err-insufficient-momentum
+        )
+
+        (map-set extension-requests extension-id {
+            requested-at: burn-block-height,
+            new-deadline: new-deadline,
+            vote-count: u0,
+            approved: false,
+            momentum-score: momentum,
+        })
+
+        (var-set extension-count extension-id)
+        (ok extension-id)
+    )
+)
+
+(define-public (vote-for-extension (extension-id uint))
+    (let (
+            (extension-opt (get-extension-request extension-id))
+            (contribution (get-contribution tx-sender))
+            (campaign-total (var-get total-raised))
+        )
+        (asserts! (is-some extension-opt) err-extension-not-found)
+        (asserts! (> contribution u0) err-no-contribution)
+        (asserts! (not (has-voted-for-extension extension-id tx-sender))
+            err-already-claimed
+        )
+
+        (let ((extension (unwrap-panic extension-opt)))
+            (asserts! (not (get approved extension))
+                err-extension-already-requested
+            )
+
+            (map-set extension-votes {
+                extension-id: extension-id,
+                voter: tx-sender,
+            }
+                true
+            )
+
+            (let ((new-vote-count (+ (get vote-count extension) contribution)))
+                (map-set extension-requests extension-id
+                    (merge extension { vote-count: new-vote-count })
+                )
+
+                (let ((approval-threshold (/ (* campaign-total u51) u100)))
+                    (if (>= new-vote-count approval-threshold)
+                        (begin
+                            (map-set extension-requests extension-id
+                                (merge extension {
+                                    approved: true,
+                                    vote-count: new-vote-count,
+                                })
+                            )
+                            (var-set campaign-deadline
+                                (get new-deadline extension)
+                            )
+                            (ok {
+                                approved: true,
+                                vote-count: new-vote-count,
+                                new-deadline: (get new-deadline extension),
+                            })
+                        )
+                        (ok {
+                            approved: false,
+                            vote-count: new-vote-count,
+                            new-deadline: (get new-deadline extension),
                         })
                     )
                 )
