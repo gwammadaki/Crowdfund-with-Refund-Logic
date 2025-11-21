@@ -62,6 +62,6 @@ plan:
         - emulated-contract-publish:
             contract-name: Crowdfund-with-Refund-Logic
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-            path: "contracts\\Crowdfund-with-Refund-Logic.clar"
+            path: contracts/Crowdfund-with-Refund-Logic.clar
             clarity-version: 3
       epoch: "3.1"

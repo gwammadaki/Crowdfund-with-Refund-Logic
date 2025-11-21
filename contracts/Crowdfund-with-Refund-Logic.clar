@@ -236,12 +236,14 @@
             (let ((new-tier (calculate-contributor-tier new-total-contribution)))
                 (map-set contributor-tiers tx-sender new-tier)
             )
-            
+
             ;; Update analytics tracking
             (if (is-eq current-contribution u0)
                 ;; New contributor
                 (begin
-                    (var-set total-unique-contributors (+ (var-get total-unique-contributors) u1))
+                    (var-set total-unique-contributors
+                        (+ (var-get total-unique-contributors) u1)
+                    )
                     (map-set contributor-activity tx-sender {
                         first-contribution-block: burn-block-height,
                         last-contribution-block: burn-block-height,
@@ -253,13 +255,15 @@
                 )
                 ;; Existing contributor
                 (let ((current-activity (unwrap-panic (map-get? contributor-activity tx-sender))))
-                    (map-set contributor-activity tx-sender (merge current-activity {
-                        last-contribution-block: burn-block-height,
-                        total-contributions: (+ (get total-contributions current-activity) u1),
-                    }))
+                    (map-set contributor-activity tx-sender
+                        (merge current-activity {
+                            last-contribution-block: burn-block-height,
+                            total-contributions: (+ (get total-contributions current-activity) u1),
+                        })
+                    )
                 )
             )
-            
+
             (var-set total-raised (+ (var-get total-raised) amount))
             (ok true)
         )
@@ -384,14 +388,39 @@
 
 (define-read-only (calculate-contributor-tier (contribution uint))
     (if (>= contribution (var-get platinum-tier-threshold))
-        { tier-name: "Platinum", tier-level: u4, voting-multiplier: u4, early-access: true }
+        {
+            tier-name: "Platinum",
+            tier-level: u4,
+            voting-multiplier: u4,
+            early-access: true,
+        }
         (if (>= contribution (var-get gold-tier-threshold))
-            { tier-name: "Gold", tier-level: u3, voting-multiplier: u3, early-access: true }
+            {
+                tier-name: "Gold",
+                tier-level: u3,
+                voting-multiplier: u3,
+                early-access: true,
+            }
             (if (>= contribution (var-get silver-tier-threshold))
-                { tier-name: "Silver", tier-level: u2, voting-multiplier: u2, early-access: true }
+                {
+                    tier-name: "Silver",
+                    tier-level: u2,
+                    voting-multiplier: u2,
+                    early-access: true,
+                }
                 (if (>= contribution (var-get bronze-tier-threshold))
-                    { tier-name: "Bronze", tier-level: u1, voting-multiplier: u1, early-access: false }
-                    { tier-name: "Standard", tier-level: u0, voting-multiplier: u1, early-access: false }
+                    {
+                        tier-name: "Bronze",
+                        tier-level: u1,
+                        voting-multiplier: u1,
+                        early-access: false,
+                    }
+                    {
+                        tier-name: "Standard",
+                        tier-level: u0,
+                        voting-multiplier: u1,
+                        early-access: false,
+                    }
                 )
             )
         )
@@ -405,8 +434,12 @@
 )
 
 (define-read-only (get-contributor-tier-info (contributor principal))
-    (default-to
-        { tier-name: "Standard", tier-level: u0, voting-multiplier: u1, early-access: false }
+    (default-to {
+        tier-name: "Standard",
+        tier-level: u0,
+        voting-multiplier: u1,
+        early-access: false,
+    }
         (map-get? contributor-tiers contributor)
     )
 )
@@ -460,12 +493,12 @@
             }
                 true
             )
-            
+
             ;; Update contributor analytics
             (let ((current-activity (unwrap-panic (map-get? contributor-activity tx-sender))))
-                (map-set contributor-activity tx-sender (merge current-activity {
-                    milestone-votes: (+ (get milestone-votes current-activity) u1),
-                }))
+                (map-set contributor-activity tx-sender
+                    (merge current-activity { milestone-votes: (+ (get milestone-votes current-activity) u1) })
+                )
             )
 
             (let ((weighted-vote (* contribution (get voting-multiplier tier-info))))
@@ -555,12 +588,12 @@
             }
                 true
             )
-            
+
             ;; Update contributor analytics
             (let ((current-activity (unwrap-panic (map-get? contributor-activity tx-sender))))
-                (map-set contributor-activity tx-sender (merge current-activity {
-                    extension-votes: (+ (get extension-votes current-activity) u1),
-                }))
+                (map-set contributor-activity tx-sender
+                    (merge current-activity { extension-votes: (+ (get extension-votes current-activity) u1) })
+                )
             )
 
             (let ((weighted-vote (* contribution (get voting-multiplier tier-info))))
@@ -628,17 +661,22 @@
         (asserts! (is-some milestone-opt) err-milestone-not-found)
         (asserts! (get early-access tier-info) err-insufficient-tier)
         (asserts! (> (get-contribution tx-sender) u0) err-no-contribution)
-        
+
         (map-set tier-early-access {
             milestone-id: milestone-id,
             user: tx-sender,
-        } burn-block-height)
-        
+        }
+            burn-block-height
+        )
+
         (ok true)
     )
 )
 
-(define-read-only (get-early-access-timestamp (milestone-id uint) (user principal))
+(define-read-only (get-early-access-timestamp
+        (milestone-id uint)
+        (user principal)
+    )
     (map-get? tier-early-access {
         milestone-id: milestone-id,
         user: user,
@@ -657,10 +695,10 @@
     )
 )
 
-(define-public (update-tier-thresholds 
-        (bronze uint) 
-        (silver uint) 
-        (gold uint) 
+(define-public (update-tier-thresholds
+        (bronze uint)
+        (silver uint)
+        (gold uint)
         (platinum uint)
     )
     (begin
@@ -668,12 +706,12 @@
         (asserts! (< bronze silver) err-amount-too-small)
         (asserts! (< silver gold) err-amount-too-small)
         (asserts! (< gold platinum) err-amount-too-small)
-        
+
         (var-set bronze-tier-threshold bronze)
         (var-set silver-tier-threshold silver)
         (var-set gold-tier-threshold gold)
         (var-set platinum-tier-threshold platinum)
-        
+
         (ok true)
     )
 )
@@ -702,12 +740,20 @@
                     (progress-score (/ (* raised-amount u100) target-amount))
                     (time-efficiency-score (if (and (> time-left u0) (> total-time u0))
                         (/ (* (- total-time time-left) u100) total-time)
-                        (if (is-eq time-left u0) u100 u0)
+                        (if (is-eq time-left u0)
+                            u100
+                            u0
+                        )
                     ))
                     (momentum-value (calculate-campaign-momentum))
                 )
                 ;; Weighted score: 40% progress, 30% time efficiency, 30% momentum
-                (ok (/ (+ (* progress-score u40) (* time-efficiency-score u30) (* momentum-value u30)) u100))
+                (ok (/
+                    (+ (* progress-score u40) (* time-efficiency-score u30)
+                        (* momentum-value u30)
+                    )
+                    u100
+                ))
             )
             (ok u0)
         )
@@ -739,8 +785,12 @@
     (let ((total-milestones (var-get milestone-count)))
         (if (> total-milestones u0)
             (let (
-                    (approved-count (fold calculate-approved-milestones (list u1 u2 u3 u4 u5 u6 u7 u8 u9 u10) u0))
-                    (completed-count (fold calculate-completed-milestones (list u1 u2 u3 u4 u5 u6 u7 u8 u9 u10) u0))
+                    (approved-count (fold calculate-approved-milestones
+                        (list u1 u2 u3 u4 u5 u6 u7 u8 u9 u10) u0
+                    ))
+                    (completed-count (fold calculate-completed-milestones
+                        (list u1 u2 u3 u4 u5 u6 u7 u8 u9 u10) u0
+                    ))
                 )
                 (ok {
                     total-milestones: total-milestones,
@@ -770,14 +820,29 @@
 
 (define-read-only (get-tier-distribution-stats)
     (let (
-            (bronze-count (fold count-tier-members (list u1 u2 u3 u4 u5 u6 u7 u8 u9 u10) { tier: u1, count: u0 }))
-            (silver-count (fold count-tier-members (list u1 u2 u3 u4 u5 u6 u7 u8 u9 u10) { tier: u2, count: u0 }))
-            (gold-count (fold count-tier-members (list u1 u2 u3 u4 u5 u6 u7 u8 u9 u10) { tier: u3, count: u0 }))
-            (platinum-count (fold count-tier-members (list u1 u2 u3 u4 u5 u6 u7 u8 u9 u10) { tier: u4, count: u0 }))
-            (standard-count (- (var-get total-unique-contributors) 
-                (+ (+ (+ (get count bronze-count) (get count silver-count)) 
-                      (get count gold-count)) 
-                   (get count platinum-count))))
+            (bronze-count (fold count-tier-members (list u1 u2 u3 u4 u5 u6 u7 u8 u9 u10) {
+                tier: u1,
+                count: u0,
+            }))
+            (silver-count (fold count-tier-members (list u1 u2 u3 u4 u5 u6 u7 u8 u9 u10) {
+                tier: u2,
+                count: u0,
+            }))
+            (gold-count (fold count-tier-members (list u1 u2 u3 u4 u5 u6 u7 u8 u9 u10) {
+                tier: u3,
+                count: u0,
+            }))
+            (platinum-count (fold count-tier-members (list u1 u2 u3 u4 u5 u6 u7 u8 u9 u10) {
+                tier: u4,
+                count: u0,
+            }))
+            (standard-count (- (var-get total-unique-contributors)
+                (+
+                    (+ (+ (get count bronze-count) (get count silver-count))
+                        (get count gold-count)
+                    )
+                    (get count platinum-count)
+                )))
         )
         (ok {
             bronze: (get count bronze-count),
@@ -812,12 +877,17 @@
             (extension-vote-count (get extension-votes activity-data))
             (contribution-count (get total-contributions activity-data))
         )
-        (ok (+ (/ contribution-amount u1000000) (* milestone-vote-count u5) (* extension-vote-count u3) contribution-count))
+        (ok (+ (/ contribution-amount u1000000) (* milestone-vote-count u5)
+            (* extension-vote-count u3) contribution-count
+        ))
     )
 )
 
 ;; Helper functions for fold operations
-(define-private (calculate-approved-milestones (milestone-id uint) (count uint))
+(define-private (calculate-approved-milestones
+        (milestone-id uint)
+        (count uint)
+    )
     (let ((milestone-opt (get-milestone milestone-id)))
         (if (is-some milestone-opt)
             (let ((milestone (unwrap-panic milestone-opt)))
@@ -831,7 +901,10 @@
     )
 )
 
-(define-private (calculate-completed-milestones (milestone-id uint) (count uint))
+(define-private (calculate-completed-milestones
+        (milestone-id uint)
+        (count uint)
+    )
     (let ((milestone-opt (get-milestone milestone-id)))
         (if (is-some milestone-opt)
             (let ((milestone (unwrap-panic milestone-opt)))
@@ -845,7 +918,13 @@
     )
 )
 
-(define-private (count-tier-members (item uint) (tier-data { tier: uint, count: uint }))
+(define-private (count-tier-members
+        (item uint)
+        (tier-data {
+            tier: uint,
+            count: uint,
+        })
+    )
     ;; This is a simplified implementation - in practice would iterate through contributors
     ;; For demo purposes, returning the same tier-data
     tier-data
@@ -890,6 +969,46 @@
         (if (> latest-id u0)
             (get-campaign-analytics latest-id)
             (err err-analytics-not-found)
+        )
+    )
+)
+
+(define-read-only (get-contributor-dashboard (user principal))
+    (let (
+            (contribution (get-contribution user))
+            (refunded-status (is-refunded user))
+            (tier-info (get-contributor-tier-info user))
+            (engagement (default-to {
+                first-contribution-block: u0,
+                last-contribution-block: u0,
+                total-contributions: u0,
+                milestone-votes: u0,
+                extension-votes: u0,
+                engagement-score: u0,
+            }
+                (map-get? contributor-activity user)
+            ))
+            (eligible-for-refund (can-refund user))
+        )
+        (let ((computed-engagement-score (+ (/ contribution u1000000) (* (get milestone-votes engagement) u5)
+                (* (get extension-votes engagement) u3)
+                (get total-contributions engagement)
+            )))
+            (ok {
+                contribution: contribution,
+                refunded: refunded-status,
+                tier-name: (get tier-name tier-info),
+                tier-level: (get tier-level tier-info),
+                voting-multiplier: (get voting-multiplier tier-info),
+                early-access: (get early-access tier-info),
+                eligible-for-refund: eligible-for-refund,
+                first-contribution-block: (get first-contribution-block engagement),
+                last-contribution-block: (get last-contribution-block engagement),
+                total-contributions-count: (get total-contributions engagement),
+                milestone-votes-count: (get milestone-votes engagement),
+                extension-votes-count: (get extension-votes engagement),
+                engagement-score: computed-engagement-score,
+            })
         )
     )
 )
