@@ -725,6 +725,35 @@
     })
 )
 
+(define-public (update-governance-settings
+        (new-required-approval-percentage uint)
+        (new-max-extensions uint)
+        (new-extension-duration uint)
+        (new-minimum-momentum-threshold uint)
+    )
+    (begin
+        (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+        (asserts! (and (> new-required-approval-percentage u0) (<= new-required-approval-percentage u100)) err-amount-too-small)
+        (asserts! (> new-max-extensions u0) err-amount-too-small)
+        (asserts! (> new-extension-duration u0) err-amount-too-small)
+        (asserts! (> new-minimum-momentum-threshold u0) err-amount-too-small)
+        (var-set required-approval-percentage new-required-approval-percentage)
+        (var-set max-extensions new-max-extensions)
+        (var-set extension-duration new-extension-duration)
+        (var-set minimum-momentum-threshold new-minimum-momentum-threshold)
+        (ok true)
+    )
+)
+
+(define-read-only (get-governance-settings)
+    (ok {
+        required-approval-percentage: (var-get required-approval-percentage),
+        max-extensions: (var-get max-extensions),
+        extension-duration: (var-get extension-duration),
+        minimum-momentum-threshold: (var-get minimum-momentum-threshold),
+    })
+)
+
 ;; ===== ANALYTICS READ-ONLY FUNCTIONS =====
 
 (define-read-only (get-campaign-performance-score)
